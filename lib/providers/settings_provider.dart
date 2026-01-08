@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
@@ -45,9 +46,19 @@ class SettingsProvider extends ChangeNotifier {
     _apiUrl = savedUrl ?? _defaultApiUrl;
     _isDarkMode = prefs.getBool('dark_mode') ?? true;
     
-    // Load notification mode
-    final modeIndex = prefs.getInt('notification_mode') ?? 0;
-    _notificationMode = NotificationMode.values[modeIndex.clamp(0, NotificationMode.values.length - 1)];
+    // Load notification mode (use String format for compatibility with FcmService)
+    final savedMode = prefs.getString('notification_mode') ?? 'all';
+    switch (savedMode) {
+      case 'favourites':
+        _notificationMode = NotificationMode.favourites;
+        break;
+      case 'off':
+        _notificationMode = NotificationMode.off;
+        break;
+      default:
+        _notificationMode = NotificationMode.all;
+    }
+    debugPrint('📋 Loaded notification mode: $_notificationMode (from: $savedMode)');
     
     // Ensure displayLimit is in limitOptions
     int savedLimit = prefs.getInt('display_limit') ?? 50;
@@ -86,7 +97,9 @@ class SettingsProvider extends ChangeNotifier {
     _notificationMode = mode;
     
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('notification_mode', mode.index);
+    // Save as String for compatibility with FcmService background handler
+    await prefs.setString('notification_mode', mode.name);
+    debugPrint('💾 Saved notification mode: ${mode.name}');
     
     notifyListeners();
   }

@@ -150,6 +150,20 @@ class FcmService {
   Future<void> initialize() async {
     final prefs = await SharedPreferences.getInstance();
     
+    // Load saved notification mode FIRST
+    final savedMode = prefs.getString('notification_mode') ?? 'all';
+    switch (savedMode) {
+      case 'favourites':
+        _notificationMode = FcmNotificationMode.favourites;
+        break;
+      case 'off':
+        _notificationMode = FcmNotificationMode.off;
+        break;
+      default:
+        _notificationMode = FcmNotificationMode.all;
+    }
+    print('📋 Loaded notification mode: $_notificationMode');
+    
     // Skip FCM on Web (has compatibility issues)
     if (kIsWeb) {
       print('⚠️ FCM not supported on Web - use Android/iOS');
@@ -228,9 +242,19 @@ class FcmService {
       await _initLocalNotifications();
       print('✅ Local notifications initialized');
 
-      // Subscribe to signal_alerts topic
-      await _messaging!.subscribeToTopic('signal_alerts');
-      print('✅ Subscribed to topic: signal_alerts');
+      // Subscribe to topic based on saved notification mode
+      if (_notificationMode == FcmNotificationMode.all) {
+        await _messaging!.subscribeToTopic('signal_alerts');
+        print('✅ Subscribed to topic: signal_alerts (mode: ALL)');
+      } else if (_notificationMode == FcmNotificationMode.off) {
+        await _messaging!.unsubscribeFromTopic('signal_alerts');
+        print('🔕 Unsubscribed from signal_alerts (mode: OFF)');
+      } else {
+        // Favourites mode - don't subscribe to main topic
+        // FavouriteProvider will handle per-symbol topics
+        await _messaging!.unsubscribeFromTopic('signal_alerts');
+        print('⭐ Not subscribing to signal_alerts (mode: FAVOURITES)');
+      }
 
       // Handle foreground messages
       FirebaseMessaging.onMessage.listen(_handleForegroundMessage);

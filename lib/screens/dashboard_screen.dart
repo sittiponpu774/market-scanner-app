@@ -13,7 +13,8 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProviderStateMixin {
+class _DashboardScreenState extends State<DashboardScreen> 
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late TabController _tabController;
 
   @override
@@ -21,16 +22,55 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     
+    // Register lifecycle observer for auto-reconnect
+    WidgetsBinding.instance.addObserver(this);
+    
     // Load initial data after first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeData();
     });
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    if (state == AppLifecycleState.resumed) {
+      // App came back to foreground - auto reconnect
+      debugPrint('📱 App resumed - checking connection...');
+      _reconnectAndRefresh();
+    }
+  }
+
+  Future<void> _reconnectAndRefresh() async {
+    final settings = context.read<SettingsProvider>();
+    final signalProvider = context.read<SignalProvider>();
+    final binanceProvider = context.read<BinanceProvider>();
+    
+    // Check API connection
+    await settings.checkConnection();
+    
+    // If connected, refresh data
+    if (settings.isConnected) {
+      debugPrint('✅ Connection restored - refreshing data...');
+      await signalProvider.fetchAllSignals(limit: settings.displayLimit);
+      
+      // Re-subscribe to Binance WebSocket
+      if (signalProvider.cryptoSignals.isNotEmpty) {
+        await binanceProvider.subscribeFromSignals(signalProvider.cryptoSignals);
+      }
+    } else {
+      debugPrint('❌ Still disconnected');
+    }
+  }
+
   Future<void> _initializeData() async {
     final settings = context.read<SettingsProvider>();
     final signalProvider = context.read<SignalProvider>();
     final binanceProvider = context.read<BinanceProvider>();
+    
+    // Check connection first
+    await settings.checkConnection();
     
     // Fetch initial signals
     signalProvider.setNotificationsEnabled(settings.notificationsEnabled);
@@ -44,6 +84,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _tabController.dispose();
     super.dispose();
   }
@@ -138,17 +179,32 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     );
   }
 
-  void _refreshAll(BuildContext context) {
+  Future<void> _refreshAll(BuildContext context) async {
     final provider = context.read<SignalProvider>();
     final settings = context.read<SettingsProvider>();
-    provider.setNotificationsEnabled(settings.notificationsEnabled);
-    provider.fetchAllSignals(limit: settings.displayLimit);
+    final binanceProvider = context.read<BinanceProvider>();
     
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Refreshing signals...'),
-        duration: Duration(seconds: 1),
-      ),
-    );
+    // Check connection first
+    await settings.checkConnection();
+    
+    provider.setNotificationsEnabled(settings.notificationsEnabled);
+    await provider.fetchAllSignals(limit: settings.displayLimit);
+    
+    // Re-subscribe to Binance if needed
+    if (provider.cryptoSignals.isNotEmpty) {
+      await binanceProvider.subscribeFromSignals(provider.cryptoSignals);
+    }
+    
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(settings.isConnected 
+              ? 'Signals refreshed!' 
+              : 'Connection failed - using cached data'),
+          duration: const Duration(seconds: 2),
+          backgroundColor: settings.isConnected ? Colors.green : Colors.orange,
+        ),
+      );
+    }
   }
 }

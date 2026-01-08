@@ -112,6 +112,11 @@ class FavouriteProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       
+      // Load notification mode to check if we need to subscribe to topics
+      final savedMode = prefs.getString('notification_mode') ?? 'all';
+      _isFavouritesMode = savedMode == 'favourites';
+      debugPrint('📋 Loaded favourites mode: $_isFavouritesMode');
+      
       // Try to load new format first
       final String? savedJson = prefs.getString(_favouritesKeyV2);
       if (savedJson != null) {
@@ -132,6 +137,12 @@ class FavouriteProvider extends ChangeNotifier {
           // Save in new format
           await _saveFavourites();
         }
+      }
+      
+      // If we're in favourites mode, subscribe to all favourite topics
+      if (_isFavouritesMode && _favourites.isNotEmpty) {
+        debugPrint('⭐ Restoring topic subscriptions for ${_favourites.length} favourites');
+        await _subscribeToFavouriteTopics();
       }
       
       _isLoaded = true;

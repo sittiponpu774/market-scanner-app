@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/providers.dart';
-import 'providers/settings_provider.dart' show NotificationMode;
 import 'screens/screens.dart';
 import 'theme/app_theme.dart';
 import 'services/notification_service.dart';
