@@ -1,0 +1,7 @@
+# Keystore configuration for release builds
+# ⚠️ DO NOT commit this file to version control!
+
+storePassword=YOUR_STORE_PASSWORD_HERE
+keyPassword=YOUR_KEY_PASSWORD_HERE
+keyAlias=upload
+storeFile=upload-keystore.jks
